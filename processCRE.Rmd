@@ -1,0 +1,344 @@
+---
+title: "EDA"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+```
+
+
+```{r}
+cre_alltracts = read_csv("CRE_22_Tract.csv")
+```
+```{r}
+cre_NY = cre_alltracts %>% filter(grepl("New York", NAME)) %>% 
+  mutate(
+    FIPS = paste(STATE, COUNTY, TRACT, sep='')
+  )
+```
+
+```{r}
+svi_NY = read_csv("NewYork.csv") %>%
+  dplyr::select(c("FIPS", "SPL_THEMES", "RPL_THEME1", "RPL_THEME2",
+                  "RPL_THEME3", "RPL_THEME4", "RPL_THEMES", "F_TOTAL"))
+```
+
+
+```{r}
+cre_svi_NY = merge(cre_NY, svi_NY, by="FIPS") %>% 
+  filter(POPUNI >= 1000) %>% 
+  filter(RPL_THEMES > 0) %>%
+  mutate(
+    PRED3_PE_lower = PRED3_PE - PRED3_PM,
+    PRED3_PE_upper = PRED3_PE + PRED3_PM,
+  )
+```
+
+```{r}
+summary(cre_svi_NY)
+```
+
+
+
+```{r}
+# CRE EDA
+ggplot(data=cre_svi_NY) +
+  geom_histogram(aes(x=PRED3_PE, fill='% of people with 3+ SV Indicators')) +
+  geom_histogram(aes(x=PRED3_PE_lower, fill='% of people with 3+ SV Indicators (lower bound)'), alpha=0.5) +
+  geom_histogram(aes(x=PRED3_PE_upper, fill='% of people with 3+ SV Indicators (upper bound)'), alpha=0.5) +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=cre_svi_NY) +
+  geom_histogram(aes(x=PRED3_PM), fill='lightblue') + 
+  geom_vline(aes(xintercept = median(PRED3_PM)), color = 'red', linetype = 'dashed', size = 0.75) + 
+  labs(x="CRE", y="Count") +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY) +
+  geom_histogram(aes(x=log(PRED3_PE), fill='% of people with 3+ SV Indicators')) + 
+  theme_bw()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY) +
+  geom_histogram(aes(x=PRED12_PE, fill='% of people with 1-2 SV Indicators')) +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY) +
+  geom_histogram(aes(x=PRED0_PE, fill='% of people with 0 SV Indicators')) +
+  theme_bw()
+```
+
+
+
+```{r}
+# SVI EDA
+summary(cre_svi_NY$RPL_THEMES)
+```
+
+```{r}
+census_tracts = st_read("tl_2022_36_tract/tl_2022_36_tract.shp") %>% 
+  rename("FIPS"="GEOID") %>% 
+  dplyr::select(c("FIPS", "INTPTLAT", "INTPTLON", "geometry"))
+```
+
+```{r}
+cre_svi_NY_geoms = merge(cre_svi_NY, census_tracts, by="FIPS")
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_sf(aes(geometry=geometry, fill=PRED3_PE)) +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x="Longitude", y="Latitude", fill="CRE") +
+  coord_sf() +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(cre_svi_NY_geoms) +
+  geom_sf(aes(geometry=geometry, fill = PRED3_PE, alpha = PRED3_PE_upper - PRED3_PE_lower)) +
+  scale_fill_viridis_c() +
+  scale_alpha_continuous(range = c(0.3, 0.8)) +
+  theme_void()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=as.numeric(INTPTLON), y=as.numeric(INTPTLAT), color=PRED3_PE)) +
+  scale_color_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=as.numeric(INTPTLON), y=as.numeric(INTPTLAT), color=PRED3_PE)) +
+  scale_color_viridis_c(option = "magma") +
+  xlim(-74.1, -73.75) +
+  ylim(40.7, 40.9) +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_sf(aes(geometry=geometry, fill=RPL_THEMES)) +
+  scale_fill_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=as.numeric(INTPTLON), y=as.numeric(INTPTLAT), color=RPL_THEMES)) +
+  scale_color_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_sf(aes(geometry=geometry, fill=PRED3_PM)) +
+  scale_fill_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=as.numeric(INTPTLON), y=as.numeric(INTPTLAT), color=PRED3_PM)) +
+  scale_color_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+
+
+```{r}
+cre_svi_NY_export = cre_svi_NY_geoms %>% 
+  dplyr::select(c("FIPS", "GEO_ID", "PRED3_PE_lower", "PRED3_PE", "PRED3_PE_upper", "RPL_THEMES"))
+
+cre_svi_NY_export$FIPS = as.character(cre_svi_NY_export$FIPS)
+```
+
+```{r}
+# write.csv(cre_svi_NY_export, file="resilience_tbl.csv", row.names = FALSE)
+```
+
+## Correlation Between SVI and CRE
+```{r}
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEMES, method="spearman")
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEMES, method="pearson")
+```
+
+```{r}
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEME1, method="spearman")
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEME2, method="spearman")
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEME3, method="spearman")
+cor(cre_svi_NY_geoms$PRED3_PE, cre_svi_NY_geoms$RPL_THEME4, method="spearman")
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=PRED3_PE / 100, y=RPL_THEMES, color='')) +
+  labs(x='CRE', y='SVI') +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=PRED3_PE / 100, y=RPL_THEME1, color='SVI Theme 1 vs. CRE')) +
+  labs(color='') +
+  theme_bw()
+
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=PRED3_PE / 100, y=RPL_THEME2, color='SVI Theme 2 vs. CRE')) +
+  labs(color='') +
+  theme_bw()
+
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=PRED3_PE / 100, y=RPL_THEME3, color='SVI Theme 3 vs. CRE')) +
+  labs(color='') +
+  theme_bw()
+
+ggplot(data=cre_svi_NY_geoms) +
+  geom_point(aes(x=PRED3_PE / 100, y=RPL_THEME4, color='SVI Theme 4 vs. CRE')) +
+  labs(color='') +
+  theme_bw()
+```
+```{r}
+cre_svi_NY_geoms_log = cre_svi_NY_geoms %>% 
+  mutate(
+    log_PRED3_PE = log(PRED3_PE)
+  )
+
+mean_log <- mean(cre_svi_NY_geoms_log$log_PRED3_PE, na.rm = TRUE)
+sd_log <- sd(cre_svi_NY_geoms_log$log_PRED3_PE, na.rm = TRUE)
+
+# Define risk categories based on the log-transformed data
+cre_svi_NY_geoms_risk <- cre_svi_NY_geoms_log %>%
+  mutate(
+    cre_risk = case_when(
+      log_PRED3_PE <= (mean_log - sd_log) ~ "low_vulnerability_cre",
+      log_PRED3_PE > (mean_log - sd_log) & log_PRED3_PE <= (mean_log + sd_log) ~ "medium_vulnerability_cre",
+      log_PRED3_PE > (mean_log + sd_log) ~ "high_vulnerability_cre",
+      TRUE ~ NA_character_ 
+    ),
+    svi_vul = case_when(
+      RPL_THEMES <= 0.33 ~ "low_svi",
+      RPL_THEMES > 0.33 & RPL_THEMES <= 0.66 ~ "medium_svi",
+      RPL_THEMES > 0.67 ~ "high_svi",
+      TRUE ~ NA_character_
+    )
+  )
+```
+
+```{r}
+ggplot(data=cre_svi_NY_geoms_risk) +
+  geom_boxplot(aes(x=cre_risk, y=RPL_THEMES, color=cre_risk, group=cre_risk)) +
+  labs(x='CRE', y='SVI', color='') +
+  theme_bw()
+```
+
+```{r}
+set.seed(90) # for reproducibility
+
+sampled_data <- cre_svi_NY_geoms_risk %>%
+  drop_na(cre_risk) %>%
+  distinct(TRACT, .keep_all = TRUE) %>%
+  group_by(cre_risk) %>%
+  sample_n(size = 30, replace = FALSE) %>%
+  ungroup()
+
+
+ggplot(sampled_data, aes(x = reorder(TRACT, PRED3_PE), y = PRED3_PE)) +
+  geom_errorbar(aes(ymin = PRED3_PE_lower, ymax = PRED3_PE_upper), 
+                width = 0.4, alpha = 0.5, color = "steelblue") +
+  geom_point(size = 0.75, color = "navy") +
+  scale_x_discrete(labels = NULL) +
+  labs(x = "Census Tract", y = "CRE with Uncertainty") +
+  theme_bw() +
+  theme(axis.ticks.x = element_blank())
+
+```
+
+```{r}
+iqr_values <- cre_svi_NY_geoms_risk %>%
+  group_by(cre_risk) %>%
+  summarise(
+    Q1 = quantile(RPL_THEMES, 0.25, na.rm = TRUE),
+    Q3 = quantile(RPL_THEMES, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1
+  )
+
+# Determine the lower and upper bounds for outliers
+iqr_values <- iqr_values %>%
+  mutate(
+    lower_bound = Q1 - 1.5 * IQR,
+    upper_bound = Q3 + 1.5 * IQR
+  )
+
+# Join the IQR values back with the original data to filter out the outliers
+data_with_outliers <- cre_svi_NY_geoms_risk %>%
+  left_join(iqr_values, by = "cre_risk") %>%
+  mutate(
+    outlier = ifelse(RPL_THEMES < lower_bound | RPL_THEMES > upper_bound, TRUE, FALSE)
+  )
+
+
+# Optionally, you can filter the outliers for further analysis
+outliers <- filter(data_with_outliers, outlier == TRUE)
+```
+
+```{r}
+library(tigris)
+
+# Load New York state boundary data
+ny_shapefile <- states(cb = TRUE) %>%
+  filter(STUSPS == "NY")  # Filter for New York
+
+ggplot(data=outliers) +
+  geom_point(aes(x=as.numeric(INTPTLON), y=as.numeric(INTPTLAT), color=PRED3_PE)) +
+  geom_sf(data = ny_shapefile, fill = NA, color = "black", size = 1) +  # Add NY border
+  scale_color_viridis_c(option = "magma") +
+  labs(x='Longitude', y='Latitude', color='CRE') +
+  theme_bw()
+```
+
+```{r}
+ggplot(data=outliers) +
+  geom_point(aes(x=PRED3_PE, y=RPL_THEMES, color=as.numeric(INTPTLAT))) +
+  scale_color_viridis_c(option = "magma") +
+  theme_bw()
+```
+
+
+```{r}
+ggplot(cre_svi_NY_geoms_risk, aes(x = PRED3_PE / 100, y = RPL_THEMES, color = svi_vul)) +
+  geom_jitter(alpha = 0.6, size = 1.5) +  # Jitter to avoid overlap
+  facet_wrap(~ cre_risk, scales = "free_y") +  # Facet by risk category
+  scale_color_manual(values = c("red", "green", "blue", "gray")) +  # Custom colors for svi_vul
+  theme_minimal() + 
+  labs(title = "Cross Section of SVI Vulnerability vs. CRE Risk Categories",
+       x = "PRED3_PE / 100",
+       y = "RPL_THEMES",
+       color = "SVI Vulnerability") +
+  theme(
+    legend.position = "right",
+    strip.text = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+```
+
+
